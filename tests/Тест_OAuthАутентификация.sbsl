@@ -1,0 +1,69 @@
+#требуется ../.executor_modules/e1c/Тестер
+#требуется ../src/api/OAuthАутентификация.sbsl
+
+метод Скрипт()
+    Тестер.Тестировать(
+        Скрипт.ПутьТекущегоСкрипта, 
+        (ИмяТестовогоМетода) -> Выполнить("%ИмяТестовогоМетода()")
+    )
+;
+
+метод Тест_СформироватьOAuth1Заголовок()
+    знч Тикет = "ST-256377-OzXpnRN25nPKg9GVahcV-cas"
+    знч Ключ = "fc3e99d2-118c-44b8-8ae3-03370dde24c0"
+    знч Секрет = "E08WAR897WEy2knn7aFBrvegVAf0AFdWBBF"
+
+    знч ЗапросOauth = КлиентHttp
+        .ЗапросGet("https://connectapi.garmin.com/oauth-service/oauth/preauthorized")
+        .УстановитьПараметрЗапроса("ticket", Тикет)
+        .УстановитьПараметрЗапроса("login-url", "https://sso.garmin.com/sso/embed")
+        .УстановитьПараметрЗапроса("accepts-mfa-tokens", "true")
+
+    пер Заголовок = OAuthАутентификация.СформироватьOAuth1Заголовок(
+        ЗапросOauth, 
+        Ключ, 
+        Секрет
+    )
+    
+    // oauth_nonce и oauth_timestamp генерируются на лету, можем проверить лишь косвенно
+    Утверждения.Проверить(Заголовок.Содержит("OAuth"))
+    пер ОжидаемыеСвойства = [
+        "oauth_consumer_key", "oauth_nonce", "oauth_signature_method", 
+        "oauth_timestamp", "oauth_version", "oauth_signature"
+    ]
+    для Свойство из ОжидаемыеСвойства
+        Утверждения.Проверить(Заголовок.Содержит("%Свойство="))
+    ;
+
+    знч КлючВладельцаРесурса = "9ed4eb49-31a3-4484-a27a-70a2f11c48e1"
+    знч СекретВладельцаРесурса = "keGoPayQf561nOnttYI3CE3VWg4mX8ko7R0"
+    Заголовок = OAuthАутентификация.СформироватьOAuth1Заголовок(
+        ЗапросOauth, 
+        Ключ, 
+        КлючВладельцаРесурса,
+        СекретВладельцаРесурса
+    )
+    Утверждения.Проверить(Заголовок.Содержит("OAuth"))
+    ОжидаемыеСвойства = новый Массив<Строка>(ОжидаемыеСвойства)
+    ОжидаемыеСвойства.Добавить("oauth_token")
+    для Свойство из ОжидаемыеСвойства
+        Утверждения.Проверить(Заголовок.Содержит("%Свойство="))
+    ;
+;
+
+метод Тест_СформироватьСигнатуруOAuth()
+    знч СтрокаДляПодписи = 
+        "GET&https%3A%2F%2Fconnectapi.garmin.com%2Foauth-service%2Foauth%2Fpreauthorized
+        &accepts-mfa-tokens%3Dtrue%26login-url%3Dhttps%253A%252F%252Fsso.garmin.com%252Fsso%252Fembed
+        %26oauth_consumer_key%3Dfc3e99d2-118c-44b8-8ae3-03370dde24c0%26oauth_nonce%3Df2680afc33d049cfab6878931d0ca0be
+        %26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1729230011%26oauth_version%3D1.0
+        %26ticket%3DST-256377-OzXpnRN25nPKg9GVahcV-cas"
+    знч Секрет = "fc3e99d2-118c-44b8-8ae3-03370dde24c0"
+    знч СекретВладельцаРесурса = "keGoPayQf561nOnttYI3CE3VWg4mX8ko7R0"
+
+    пер Сигнатура = OAuthАутентификация.СформироватьСигнатуруOAuth(СтрокаДляПодписи, Секрет)
+    Утверждения.ПроверитьРавенство("syRLRBGRrK7Hcl12JQXSQ8RbhdE=", Сигнатура)    
+
+    Сигнатура = OAuthАутентификация.СформироватьСигнатуруOAuth(СтрокаДляПодписи, Секрет, СекретВладельцаРесурса)
+    Утверждения.ПроверитьРавенство("x1BPavMT50PsN6lai63ftHCjfzc=", Сигнатура)  
+;
